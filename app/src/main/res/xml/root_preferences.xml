@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <PreferenceCategory app:title="RTSP Connection Settings">
+
+        <EditTextPreference
+            app:key="rtsp_url"
+            app:title="RTSP URL"
+            app:defaultValue="rtsp://"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="rtsp_username"
+            app:title="Username"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="rtsp_password"
+            app:title="Password"
+            app:useSimpleSummaryProvider="true"
+            app:summary="*****" />
+
+    </PreferenceCategory>
+    
+    <PreferenceCategory app:title="Video Settings">
+
+        <EditTextPreference
+            app:key="video_width"
+            app:title="Video Width"
+            app:defaultValue="1280"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="video_height"
+            app:title="Video Height"
+            app:defaultValue="720"
+            app:useSimpleSummaryProvider="true" />
+            
+        <ListPreference
+            app:key="aspect_ratio_mode"
+            app:title="Aspect Ratio Mode"
+            app:entries="@array/aspect_ratio_mode_entries"
+            app:entryValues="@array/aspect_ratio_mode_values"
+            app:defaultValue="0"
+            app:useSimpleSummaryProvider="true" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>
