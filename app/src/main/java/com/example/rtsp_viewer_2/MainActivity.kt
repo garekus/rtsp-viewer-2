@@ -1,7 +1,6 @@
 package com.example.rtsp_viewer_2
 
 import android.os.Bundle
-import com.google.android.material.snackbar.Snackbar
 import androidx.appcompat.app.AppCompatActivity
 import androidx.navigation.findNavController
 import androidx.navigation.ui.AppBarConfiguration
@@ -27,12 +26,6 @@ class MainActivity : AppCompatActivity() {
         val navController = findNavController(R.id.nav_host_fragment_content_main)
         appBarConfiguration = AppBarConfiguration(navController.graph)
         setupActionBarWithNavController(navController, appBarConfiguration)
-
-        binding.fab.setOnClickListener { view ->
-            Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                .setAction("Action", null)
-                .setAnchorView(R.id.fab).show()
-        }
     }
 
     override fun onCreateOptionsMenu(menu: Menu): Boolean {
@@ -47,9 +40,7 @@ class MainActivity : AppCompatActivity() {
         // as you specify a parent activity in AndroidManifest.xml.
         return when (item.itemId) {
             R.id.action_settings -> {
-                // Navigate to the settings fragment
-                findNavController(R.id.nav_host_fragment_content_main)
-                    .navigate(R.id.SettingsFragment)
+                findNavController(R.id.nav_host_fragment_content_main).navigate(R.id.action_FirstFragment_to_SettingsFragment)
                 true
             }
             else -> super.onOptionsItemSelected(item)
