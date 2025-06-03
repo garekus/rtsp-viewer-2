@@ -25,6 +25,22 @@
 
     </com.example.rtsp_viewer_2.AspectRatioFrameLayout>
     
+    <!-- Motion detection status indicator -->
+    <TextView
+        android:id="@+id/motion_status_textview"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Motion: Off"
+        android:textColor="@android:color/white"
+        android:background="#80000000"
+        android:padding="8dp"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginTop="16dp"
+        android:layout_marginStart="16dp"
+        android:elevation="9dp"
+        android:visibility="gone" />
+    
     <!-- Secondary RTSP viewer (Picture-in-Picture style) -->
     <com.example.rtsp_viewer_2.AspectRatioFrameLayout
         android:id="@+id/pip_aspect_ratio_layout"
