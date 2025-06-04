@@ -20,11 +20,7 @@ import com.alexvas.rtsp.codec.VideoDecodeThread
 import com.alexvas.rtsp.widget.RtspStatusListener
 import com.alexvas.rtsp.widget.RtspSurfaceView
 import com.example.rtsp_viewer_2.databinding.FragmentFirstBinding
-import java.io.File
-import java.io.FileOutputStream
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+
 
 /**
  * A Fragment that displays an RTSP stream from a camera.
@@ -44,6 +40,10 @@ class FirstFragment : Fragment() {
     private lateinit var motionDetectionHandler: Handler
     private var previousBitmap: Bitmap? = null
     private var isMotionDetectionActive = false
+    
+    // Advanced motion detection variables
+    private val motionHistoryMap = HashMap<String, Int>() // Tracks motion persistence in regions
+    private var motionRegions = ArrayList<android.graphics.Rect>() // Current motion regions
 
     private val motionDetectionRunnable = object : Runnable {
         override fun run() {
@@ -105,11 +105,17 @@ class FirstFragment : Fragment() {
     }
 
     companion object {
-        private const val MOTION_DETECTION_INTERVAL_MS = 500L
-        private const val DOWNSCALE_FACTOR = 0.25f // Process at 1/4 resolution
+        private const val MOTION_DETECTION_INTERVAL_MS = 300L
+        private const val DOWNSCALE_FACTOR = 0.5f // Process at 1/4 resolution
         private const val PIXEL_DIFFERENCE_THRESHOLD = 30 // Grayscale difference
-        private const val MOTION_AREA_THRESHOLD_PERCENT = 0.2 // 0.2% of pixels must change
+        private const val MOTION_AREA_THRESHOLD_PERCENT = 0.4 // 0.2% of pixels must change
         private const val INITIAL_FRAME_CAPTURE_DELAY_MS = 1000L // Delay before first PixelCopy
+        
+        // Advanced motion detection parameters
+        private const val REGION_SIZE_THRESHOLD = 10 // Minimum width/height of a motion region
+        private const val MOTION_PERSISTENCE_THRESHOLD = 2 // Number of consecutive detections needed
+        private const val GRID_CELLS_X = 8 // Number of grid cells horizontally
+        private const val GRID_CELLS_Y = 6 // Number of grid cells vertically
     }
 
     override fun onCreateView(
@@ -323,8 +329,11 @@ class FirstFragment : Fragment() {
             Log.d(TAG, "Starting motion detection with initial delay...")
             isMotionDetectionActive = true
             previousBitmap = null // Reset previous frame
+            motionHistoryMap.clear() // Reset motion history
+            motionRegions.clear() // Reset motion regions
             binding.motionStatusTextview.text = "Motion: No"
             binding.motionStatusTextview.visibility = View.VISIBLE
+            binding.motionOverlayView.clearMotionRegions() // Clear any existing motion regions
             // Add an initial delay before the first attempt
             motionDetectionHandler.postDelayed(motionDetectionRunnable, INITIAL_FRAME_CAPTURE_DELAY_MS)
         }
@@ -341,9 +350,12 @@ class FirstFragment : Fragment() {
                 }
             }
             previousBitmap = null
+            motionHistoryMap.clear() // Clear motion history
+            motionRegions.clear() // Clear motion regions
             if (_binding != null) {
                 binding.motionStatusTextview.text = "Motion: Off"
                 // binding.motionStatusTextview.visibility = View.GONE // Or keep it visible with "Off"
+                binding.motionOverlayView.clearMotionRegions() // Clear motion regions from overlay
             }
         }
     }
@@ -384,7 +396,8 @@ class FirstFragment : Fragment() {
             return
         }
 
-        val motionDetected = compareBitmaps(prevBmp, currentBitmap)
+        // Use the advanced motion detection algorithm instead of simple comparison
+        val motionDetected = detectAdvancedMotion(prevBmp, currentBitmap)
 
         activity?.runOnUiThread {
             if (_binding != null && isAdded) { // Check isAdded for safety
@@ -395,6 +408,185 @@ class FirstFragment : Fragment() {
         // Recycle the old previousBitmap and store the new currentBitmap
         if (!prevBmp.isRecycled) prevBmp.recycle()
         previousBitmap = currentBitmap
+    }
+    
+    /**
+     * Advanced motion detection that filters out small random movements
+     * like tree leaves by using region-based analysis and motion persistence
+     */
+    private fun detectAdvancedMotion(bmp1: Bitmap, bmp2: Bitmap): Boolean {
+        if (bmp1.width != bmp2.width || bmp1.height != bmp2.height) {
+            return false // Should not happen if processed correctly
+        }
+
+        val width = bmp1.width
+        val height = bmp1.height
+        
+        // Create a difference bitmap to track motion pixels
+        val diffBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val diffPixels = IntArray(width * height)
+        val pixels1 = IntArray(width * height)
+        val pixels2 = IntArray(width * height)
+
+        bmp1.getPixels(pixels1, 0, width, 0, 0, width, height)
+        bmp2.getPixels(pixels2, 0, width, 0, 0, width, height)
+
+        var totalDiffPixels = 0
+        
+        // Calculate pixel differences and mark them in diffPixels
+        for (i in pixels1.indices) {
+            val p1 = Color.red(pixels1[i]) // Since it's grayscale, R=G=B
+            val p2 = Color.red(pixels2[i])
+            
+            if (Math.abs(p1 - p2) > PIXEL_DIFFERENCE_THRESHOLD) {
+                diffPixels[i] = Color.WHITE // Mark as motion pixel
+                totalDiffPixels++
+            } else {
+                diffPixels[i] = Color.BLACK // No motion
+            }
+        }
+        
+        // Set the difference pixels to the bitmap
+        diffBitmap.setPixels(diffPixels, 0, width, 0, 0, width, height)
+        
+        // Calculate the total percentage of changed pixels
+        val totalPixels = width * height
+        val diffPercentage = (totalDiffPixels.toDouble() / totalPixels) * 100
+        
+        // Step 1: Basic motion check (similar to original algorithm)
+        val basicMotionDetected = diffPercentage >= MOTION_AREA_THRESHOLD_PERCENT
+        
+        // If no basic motion detected, we can skip the advanced processing
+        if (!basicMotionDetected) {
+            diffBitmap.recycle()
+            // Clear motion history for regions with no motion
+            decrementMotionHistory()
+            
+            // Clear motion regions on the overlay
+            activity?.runOnUiThread {
+                if (_binding != null && isAdded) {
+                    binding.motionOverlayView.clearMotionRegions()
+                }
+            }
+            
+            return false
+        }
+        
+        // Step 2: Identify motion regions by dividing the image into a grid
+        val cellWidth = width / GRID_CELLS_X
+        val cellHeight = height / GRID_CELLS_Y
+        
+        // Reset motion regions
+        motionRegions.clear()
+        
+        // Check each grid cell for motion
+        for (gridY in 0 until GRID_CELLS_Y) {
+            for (gridX in 0 until GRID_CELLS_X) {
+                val startX = gridX * cellWidth
+                val startY = gridY * cellHeight
+                val endX = Math.min((gridX + 1) * cellWidth, width)
+                val endY = Math.min((gridY + 1) * cellHeight, height)
+                
+                // Count motion pixels in this cell
+                var cellMotionPixels = 0
+                for (y in startY until endY) {
+                    for (x in startX until endX) {
+                        val index = y * width + x
+                        if (index < diffPixels.size && diffPixels[index] == Color.WHITE) {
+                            cellMotionPixels++
+                        }
+                    }
+                }
+                
+                // Calculate percentage of motion in this cell
+                val cellTotalPixels = (endX - startX) * (endY - startY)
+                val cellMotionPercentage = (cellMotionPixels.toDouble() / cellTotalPixels) * 100
+                
+                // If enough motion in this cell, mark it as a motion region
+                if (cellMotionPercentage >= MOTION_AREA_THRESHOLD_PERCENT * 2) { // Higher threshold for individual cells
+                    val region = android.graphics.Rect(startX, startY, endX, endY)
+                    motionRegions.add(region)
+                    
+                    // Update motion history for this region
+                    val regionKey = "${gridX}_${gridY}"
+                    val currentCount = motionHistoryMap[regionKey] ?: 0
+                    motionHistoryMap[regionKey] = currentCount + 1
+                } else {
+                    // Decrement history for this region since no motion detected
+                    val regionKey = "${gridX}_${gridY}"
+                    val currentCount = motionHistoryMap[regionKey] ?: 0
+                    if (currentCount > 0) {
+                        motionHistoryMap[regionKey] = currentCount - 1
+                    }
+                }
+            }
+        }
+        
+        // Clean up
+        diffBitmap.recycle()
+        
+        // Step 3: Check if any region has persistent motion
+        var persistentMotionDetected = false
+        val activeMotionRegions = ArrayList<android.graphics.Rect>()
+        
+        for ((regionKey, count) in motionHistoryMap) {
+            if (count >= MOTION_PERSISTENCE_THRESHOLD) {
+                persistentMotionDetected = true
+                
+                // Extract grid coordinates from the region key
+                val parts = regionKey.split("_")
+                if (parts.size == 2) {
+                    try {
+                        val gridX = parts[0].toInt()
+                        val gridY = parts[1].toInt()
+                        
+                        // Calculate the rectangle for this grid cell
+                        val startX = gridX * cellWidth
+                        val startY = gridY * cellHeight
+                        val endX = Math.min((gridX + 1) * cellWidth, width)
+                        val endY = Math.min((gridY + 1) * cellHeight, height)
+                        
+                        // Add to active motion regions
+                        activeMotionRegions.add(android.graphics.Rect(startX, startY, endX, endY))
+                    } catch (e: NumberFormatException) {
+                        Log.e(TAG, "Error parsing region key: $regionKey", e)
+                    }
+                }
+            }
+        }
+        
+        // Update the motion overlay with active regions
+        activity?.runOnUiThread {
+            if (_binding != null && isAdded) {
+                binding.motionOverlayView.updateMotionRegions(activeMotionRegions, width, height)
+            }
+        }
+        
+        Log.d(TAG, "Motion detection: basic=$basicMotionDetected, persistent=$persistentMotionDetected, " +
+              "regions=${motionRegions.size}, activeRegions=${activeMotionRegions.size}, diffPercentage=$diffPercentage%")
+        
+        return persistentMotionDetected
+    }
+    
+    /**
+     * Decrement motion history for all regions to gradually forget old motion
+     */
+    private fun decrementMotionHistory() {
+        val keysToRemove = ArrayList<String>()
+        
+        for ((key, count) in motionHistoryMap) {
+            if (count > 0) {
+                motionHistoryMap[key] = count - 1
+            }
+            if (motionHistoryMap[key] == 0) {
+                keysToRemove.add(key)
+            }
+        }
+        
+        // Clean up regions with no motion
+        for (key in keysToRemove) {
+            motionHistoryMap.remove(key)
+        }
     }
 
     private fun downscaleBitmap(bitmap: Bitmap, scaleFactor: Float): Bitmap {
@@ -418,85 +610,6 @@ class FirstFragment : Fragment() {
         canvas.drawBitmap(bmpOriginal, 0f, 0f, paint)
         
         return bmpGrayscale
-    }
-
-    private fun compareBitmaps(bmp1: Bitmap, bmp2: Bitmap): Boolean {
-        if (bmp1.width != bmp2.width || bmp1.height != bmp2.height) {
-            return false // Should not happen if processed correctly
-        }
-
-        val width = bmp1.width
-        val height = bmp1.height
-        var diffPixels = 0
-        val pixels1 = IntArray(width * height)
-        val pixels2 = IntArray(width * height)
-
-        bmp1.getPixels(pixels1, 0, width, 0, 0, width, height)
-        bmp2.getPixels(pixels2, 0, width, 0, 0, width, height)
-
-        for (i in pixels1.indices) {
-            // For ARGB_8888, get grayscale value from RGB components
-            val p1 = Color.red(pixels1[i]) // Since it's grayscale, R=G=B
-            val p2 = Color.red(pixels2[i])
-            if (Math.abs(p1 - p2) > PIXEL_DIFFERENCE_THRESHOLD) {
-                diffPixels++
-            }
-        }
-
-        val totalPixels = width * height
-        val diffPercentage = (diffPixels.toDouble() / totalPixels) * 100
-
-        return diffPercentage >= MOTION_AREA_THRESHOLD_PERCENT
-    }
-    
-    /**
-     * Saves a pair of bitmaps to external storage for debugging purposes
-     */
-    private fun saveBitmapPairForDebug(bmp1: Bitmap, bmp2: Bitmap, diffPercentage: Double) {
-        try {
-            // Create a timestamp for unique filenames
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            
-            // Get the app's external files directory
-            val storageDir = context?.getExternalFilesDir(Environment.DIRECTORY_PICTURES)
-            if (storageDir == null) {
-                Log.e(TAG, "Failed to get external files directory")
-                return
-            }
-            
-            // Create debug directory if it doesn't exist
-            val debugDir = File(storageDir, "motion_debug")
-            if (!debugDir.exists()) {
-                if (!debugDir.mkdirs()) {
-                    Log.e(TAG, "Failed to create debug directory")
-                    return
-                }
-            }
-            
-            // Create copies of the bitmaps to avoid recycling issues
-            val bmp1Copy = bmp1.copy(bmp1.config ?: Bitmap.Config.ARGB_8888, true)
-            val bmp2Copy = bmp2.copy(bmp2.config ?: Bitmap.Config.ARGB_8888, true)
-            
-            // Save the first bitmap
-            val file1 = File(debugDir, "frame1_${timestamp}_${diffPercentage.toInt()}pct.png")
-            FileOutputStream(file1).use { out ->
-                bmp1Copy.compress(Bitmap.CompressFormat.PNG, 100, out)
-            }
-            
-            // Save the second bitmap
-            val file2 = File(debugDir, "frame2_${timestamp}_${diffPercentage.toInt()}pct.png")
-            FileOutputStream(file2).use { out ->
-                bmp2Copy.compress(Bitmap.CompressFormat.PNG, 100, out)
-            }
-            
-            // Recycle the copies
-            bmp1Copy.recycle()
-            bmp2Copy.recycle()
-            
-            Log.d(TAG, "Saved debug bitmap pair to ${debugDir.absolutePath}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error saving debug bitmaps", e)
-        }
     }
 
     override fun onResume() {
