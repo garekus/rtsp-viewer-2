@@ -110,10 +110,7 @@ class FirstFragment : Fragment() {
         private const val PIXEL_DIFFERENCE_THRESHOLD = 30 // Grayscale difference
         private const val MOTION_AREA_THRESHOLD_PERCENT = 0.2 // 0.2% of pixels must change
         private const val INITIAL_FRAME_CAPTURE_DELAY_MS = 1000L // Delay before first PixelCopy
-        private const val DEBUG_SAVE_BITMAP_FREQUENCY = 0 // Save debug bitmaps every 20 comparisons
     }
-
-    private var bitmapComparisonCounter = 0
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -156,31 +153,66 @@ class FirstFragment : Fragment() {
     
     private fun connectToRtspStream() {
         try {
-            // Get the URL, username, and password from SharedPreferences
+            // Get the shared preferences
             val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext())
-            val rtspUrl = sharedPreferences.getString("rtsp_url", "") ?: ""
-            val username = sharedPreferences.getString("rtsp_username", "") ?: ""
-            val password = sharedPreferences.getString("rtsp_password", "") ?: ""
             
-            if (rtspUrl.isEmpty()) {
-                Toast.makeText(context, "Please set a valid RTSP URL in Settings", Toast.LENGTH_SHORT).show()
-                return
-            }
+            // Connect the main RTSP view (Stream 1)
+            connectMainRtspView(sharedPreferences)
             
-            Log.d(TAG, "Connecting to RTSP: $rtspUrl")
+            // Connect the PiP RTSP view (Stream 2)
+            connectPipRtspView(sharedPreferences)
             
-            // Parse the URL
-            val uri = Uri.parse(rtspUrl)
-            
-            // Connect the main RTSP view
-            connectRtspView(binding.rtspSurfaceView, uri, username, password, true)
-            
-            // Connect the PiP RTSP view (same stream, but without audio)
-            connectRtspView(binding.pipRtspSurfaceView, uri, username, password, false)
         } catch (e: Exception) {
-            Log.e(TAG, "Error connecting to RTSP stream", e)
+            Log.e(TAG, "Error connecting to RTSP streams", e)
             Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
         }
+    }
+    
+    /**
+     * Connect the main RTSP view using Stream 1 settings
+     */
+    private fun connectMainRtspView(sharedPreferences: android.content.SharedPreferences) {
+        // Get Stream 1 settings
+        val rtspUrl = sharedPreferences.getString("rtsp_url_1", "") ?: ""
+        val username = sharedPreferences.getString("rtsp_username_1", "") ?: ""
+        val password = sharedPreferences.getString("rtsp_password_1", "") ?: ""
+        
+        if (rtspUrl.isEmpty()) {
+            Toast.makeText(context, "Please set a valid RTSP URL for Stream 1 in Settings", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        Log.d(TAG, "Connecting main view to RTSP Stream 1: $rtspUrl")
+        
+        // Parse the URL
+        val uri = Uri.parse(rtspUrl)
+        
+        // Connect the main RTSP view with audio enabled
+        connectRtspView(binding.rtspSurfaceView, uri, username, password, true)
+    }
+    
+    /**
+     * Connect the PiP RTSP view using Stream 2 settings
+     */
+    private fun connectPipRtspView(sharedPreferences: android.content.SharedPreferences) {
+        // Get Stream 2 settings
+        val rtspUrl = sharedPreferences.getString("rtsp_url_2", "") ?: ""
+        val username = sharedPreferences.getString("rtsp_username_2", "") ?: ""
+        val password = sharedPreferences.getString("rtsp_password_2", "") ?: ""
+        
+        if (rtspUrl.isEmpty()) {
+            // Don't show a toast for this, just log it
+            Log.d(TAG, "No RTSP URL set for Stream 2, PiP view will not be connected")
+            return
+        }
+        
+        Log.d(TAG, "Connecting PiP view to RTSP Stream 2: $rtspUrl")
+        
+        // Parse the URL
+        val uri = Uri.parse(rtspUrl)
+        
+        // Connect the PiP RTSP view without audio
+        connectRtspView(binding.pipRtspSurfaceView, uri, username, password, false)
     }
     
     /**
@@ -227,8 +259,10 @@ class FirstFragment : Fragment() {
                     rtspView.post {
                         val sharedPreferences = PreferenceManager.getDefaultSharedPreferences(requireContext())
                         // Get the video size from preferences or use a default aspect ratio
-                        val videoWidth = sharedPreferences.getString("video_width", "1280")?.toIntOrNull() ?: 1280
-                        val videoHeight = sharedPreferences.getString("video_height", "720")?.toIntOrNull() ?: 720
+                        val streamSuffix = if (rtspView == binding.rtspSurfaceView) "_1" else "_2"
+                        val videoWidth = sharedPreferences.getString("video_width$streamSuffix", "1280")?.toIntOrNull() ?: 1280
+                        val videoHeight = sharedPreferences.getString("video_height$streamSuffix", "720")?.toIntOrNull() ?: 720
+                        
                         if (videoWidth > 0 && videoHeight > 0) {
                             Log.d(TAG, "Setting aspect ratio: ${videoWidth}x${videoHeight}")
                             if (rtspView == binding.rtspSurfaceView) {
@@ -411,14 +445,7 @@ class FirstFragment : Fragment() {
 
         val totalPixels = width * height
         val diffPercentage = (diffPixels.toDouble() / totalPixels) * 100
-        Log.d(TAG, "Diff percentage: $diffPercentage%, diffPixels: $diffPixels, totalPixels: $totalPixels")
-        
-        // Save debug bitmaps periodically
-        bitmapComparisonCounter++
-        if (DEBUG_SAVE_BITMAP_FREQUENCY > 0 && bitmapComparisonCounter % DEBUG_SAVE_BITMAP_FREQUENCY == 0) {
-            saveBitmapPairForDebug(bmp1, bmp2, diffPercentage)
-        }
-        
+
         return diffPercentage >= MOTION_AREA_THRESHOLD_PERCENT
     }
     

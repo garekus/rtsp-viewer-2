@@ -1,40 +1,73 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PreferenceScreen xmlns:app="http://schemas.android.com/apk/res-auto">
 
-    <PreferenceCategory app:title="RTSP Connection Settings">
+    <PreferenceCategory app:title="Stream 1 Settings (Main View)">
 
         <EditTextPreference
-            app:key="rtsp_url"
+            app:key="rtsp_url_1"
             app:title="RTSP URL"
             app:defaultValue="rtsp://"
             app:useSimpleSummaryProvider="true" />
 
         <EditTextPreference
-            app:key="rtsp_username"
+            app:key="rtsp_username_1"
             app:title="Username"
             app:useSimpleSummaryProvider="true" />
 
         <EditTextPreference
-            app:key="rtsp_password"
+            app:key="rtsp_password_1"
             app:title="Password"
             app:useSimpleSummaryProvider="true"
             app:summary="*****" />
 
-    </PreferenceCategory>
-    
-    <PreferenceCategory app:title="Video Settings">
-
         <EditTextPreference
-            app:key="video_width"
+            app:key="video_width_1"
             app:title="Video Width"
             app:defaultValue="1280"
             app:useSimpleSummaryProvider="true" />
 
         <EditTextPreference
-            app:key="video_height"
+            app:key="video_height_1"
             app:title="Video Height"
             app:defaultValue="720"
             app:useSimpleSummaryProvider="true" />
+
+    </PreferenceCategory>
+    
+    <PreferenceCategory app:title="Stream 2 Settings (PiP View)">
+
+        <EditTextPreference
+            app:key="rtsp_url_2"
+            app:title="RTSP URL"
+            app:defaultValue="rtsp://"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="rtsp_username_2"
+            app:title="Username"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="rtsp_password_2"
+            app:title="Password"
+            app:useSimpleSummaryProvider="true"
+            app:summary="*****" />
+
+        <EditTextPreference
+            app:key="video_width_2"
+            app:title="Video Width"
+            app:defaultValue="1280"
+            app:useSimpleSummaryProvider="true" />
+
+        <EditTextPreference
+            app:key="video_height_2"
+            app:title="Video Height"
+            app:defaultValue="720"
+            app:useSimpleSummaryProvider="true" />
+
+    </PreferenceCategory>
+    
+    <PreferenceCategory app:title="Display Settings">
             
         <ListPreference
             app:key="aspect_ratio_mode"
