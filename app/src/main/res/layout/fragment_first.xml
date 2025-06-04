@@ -23,14 +23,10 @@
             android:layout_height="match_parent"
             android:layout_gravity="center" />
 
-        <!-- Motion detection overlay -->
-        <com.example.rtsp_viewer_2.MotionOverlayView
-            android:id="@+id/motion_overlay_view"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent" />
-
     </com.example.rtsp_viewer_2.AspectRatioFrameLayout>
     
+    <!-- Motion detection overlay positioned directly over the video view -->
+
     <!-- Motion detection status indicator -->
     <TextView
         android:id="@+id/motion_status_textview"
@@ -48,6 +44,7 @@
         android:visibility="gone" />
     
     <!-- Secondary RTSP viewer (Picture-in-Picture style) -->
+
     <com.example.rtsp_viewer_2.AspectRatioFrameLayout
         android:id="@+id/pip_aspect_ratio_layout"
         android:layout_width="0dp"

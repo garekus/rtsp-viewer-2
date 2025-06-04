@@ -106,16 +106,16 @@ class FirstFragment : Fragment() {
 
     companion object {
         private const val MOTION_DETECTION_INTERVAL_MS = 300L
-        private const val DOWNSCALE_FACTOR = 0.5f // Process at 1/4 resolution
+        private const val DOWNSCALE_FACTOR = 0.5f // Process at 1/2 resolution
         private const val PIXEL_DIFFERENCE_THRESHOLD = 30 // Grayscale difference
-        private const val MOTION_AREA_THRESHOLD_PERCENT = 0.4 // 0.2% of pixels must change
+        private const val MOTION_AREA_THRESHOLD_PERCENT = 0.5 // 0.5% of pixels must change
         private const val INITIAL_FRAME_CAPTURE_DELAY_MS = 1000L // Delay before first PixelCopy
         
         // Advanced motion detection parameters
         private const val REGION_SIZE_THRESHOLD = 10 // Minimum width/height of a motion region
-        private const val MOTION_PERSISTENCE_THRESHOLD = 2 // Number of consecutive detections needed
-        private const val GRID_CELLS_X = 8 // Number of grid cells horizontally
-        private const val GRID_CELLS_Y = 6 // Number of grid cells vertically
+        private const val MOTION_PERSISTENCE_THRESHOLD = 4 // Number of consecutive detections needed
+        private const val GRID_CELLS_X = 6 // Number of grid cells horizontally (swapped with Y)
+        private const val GRID_CELLS_Y = 8 // Number of grid cells vertically (swapped with X)
     }
 
     override fun onCreateView(
@@ -333,7 +333,6 @@ class FirstFragment : Fragment() {
             motionRegions.clear() // Reset motion regions
             binding.motionStatusTextview.text = "Motion: No"
             binding.motionStatusTextview.visibility = View.VISIBLE
-            binding.motionOverlayView.clearMotionRegions() // Clear any existing motion regions
             // Add an initial delay before the first attempt
             motionDetectionHandler.postDelayed(motionDetectionRunnable, INITIAL_FRAME_CAPTURE_DELAY_MS)
         }
@@ -355,7 +354,6 @@ class FirstFragment : Fragment() {
             if (_binding != null) {
                 binding.motionStatusTextview.text = "Motion: Off"
                 // binding.motionStatusTextview.visibility = View.GONE // Or keep it visible with "Off"
-                binding.motionOverlayView.clearMotionRegions() // Clear motion regions from overlay
             }
         }
     }
@@ -462,17 +460,11 @@ class FirstFragment : Fragment() {
             // Clear motion history for regions with no motion
             decrementMotionHistory()
             
-            // Clear motion regions on the overlay
-            activity?.runOnUiThread {
-                if (_binding != null && isAdded) {
-                    binding.motionOverlayView.clearMotionRegions()
-                }
-            }
-            
             return false
         }
         
         // Step 2: Identify motion regions by dividing the image into a grid
+        // We'll create a grid that matches the orientation of the video
         val cellWidth = width / GRID_CELLS_X
         val cellHeight = height / GRID_CELLS_Y
         
@@ -552,13 +544,6 @@ class FirstFragment : Fragment() {
                         Log.e(TAG, "Error parsing region key: $regionKey", e)
                     }
                 }
-            }
-        }
-        
-        // Update the motion overlay with active regions
-        activity?.runOnUiThread {
-            if (_binding != null && isAdded) {
-                binding.motionOverlayView.updateMotionRegions(activeMotionRegions, width, height)
             }
         }
         
